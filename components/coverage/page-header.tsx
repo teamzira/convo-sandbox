@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { SeedDialog } from './seed-dialog';
 
 const TABS = [
   { href: '/', label: 'Coverage' },
@@ -11,11 +12,19 @@ export function PageHeader({
   description,
   active,
   actions,
+  showSeedAction,
 }: {
   title: string;
   description: string;
   active: (typeof TABS)[number]['href'];
   actions?: React.ReactNode;
+  /**
+   * Renders the seed dialog here rather than through `actions`. Radix
+   * components handed across an RSC prop boundary get a different `useId`
+   * tree position on the server than on the client, which hydrates as a
+   * mismatched `aria-controls`. Rendering it directly keeps the ids stable.
+   */
+  showSeedAction?: boolean;
 }) {
   return (
     <header className="space-y-4">
@@ -24,7 +33,10 @@ export function PageHeader({
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        {actions}
+        <div className="flex items-center gap-2">
+          {actions}
+          {showSeedAction ? <SeedDialog /> : null}
+        </div>
       </div>
       <nav className="border-b">
         <div className="-mb-px flex gap-1">

@@ -20,6 +20,7 @@ app/
   page.tsx              Coverage board — open shifts, eligibility counts, AMR, overstaffing
   shifts/[id]/page.tsx  Match & offer — ranked pool, per-rule reasons, offer blast
   policies/page.tsx     The matching policy the rankings come from
+  api/seed/route.ts     Preflight + writer for seeding a real account
 lib/sandbox/
   types.ts      Domain + policy-result model
   fixtures.ts   Stand-in dataset, generated relative to today
@@ -28,6 +29,9 @@ lib/sandbox/
   matching.ts   Stand-in for the policy engine's evaluation
   view.ts       Server → client view models
   format.ts     Presentation helpers
+  intervals.ts  Quarter-hour coverage curve behind the daily bars
+  seed.ts       Seed rows keyed by field name
+  seed-contract.ts  Wire types shared by the route and the dialog
 components/coverage/    App components (shadcn primitives underneath)
 ```
 
@@ -58,6 +62,46 @@ limits:
 - **Ties are expected.** The engine returns them; `rankMatches` breaks ties on
   seniority, which is the contract's stated tiebreak, and that tiebreak is the
   app's, not the engine's.
+
+## Seeding a real account
+
+`app/api/seed/route.ts` fills existing collections from the same world the
+fixtures describe, driven by `lib/sandbox/seed.ts`. Three constraints come
+straight from the Open API and are worth knowing before extending it:
+
+- **Records only.** The client can create records, not collections or fields.
+  Target collections must already exist; the route matches them by exact,
+  case-insensitive name and resolves fields by name to UUID.
+- **No delete.** Anything seeded has to be removed by hand in Teambridge, so
+  every row carries `SEED_MARKER` (`[SANDBOX]`) in a text field where the
+  collection has one, and the dialog says so before it writes.
+- **Unknown schemas.** Optional fields the account does not have are dropped
+  rather than guessed at; a target missing a *required* field is refused with
+  the field named. `GET /api/seed` is a preflight that reports all of this and
+  writes nothing.
+
+Seeding `Users` is defaulted off: creating user records may provision real
+people and trigger invitations, which is not something a demo should do by
+accident.
+
+## Two boundary gotchas
+
+Both cost real debugging time; neither is obvious from the symptom.
+
+1. **Don't import from a route file into a Client Component**, even
+   `import type`. It pulls the route — and with it `next/headers` and the API
+   client — toward the browser bundle. Shared wire types live in
+   `lib/sandbox/seed-contract.ts` for exactly this reason.
+2. **Don't hand a Radix component to a Server Component as a JSX prop.** The
+   `useId` tree position differs between the SSR pass and hydration, which
+   surfaces as a mismatched `aria-controls` and a "tree hydrated but some
+   attributes… didn't match" error. `PageHeader` renders `<SeedDialog />`
+   itself via a `showSeedAction` flag rather than receiving it through
+   `actions`.
+
+If client components on a page all stop rendering at once — charts blank, no
+`.recharts-wrapper` in the DOM — suspect a stale Turbopack state first. Stop
+the dev server, `rm -rf .next`, and restart before hunting the code.
 
 ## Going from fixtures to a live account
 

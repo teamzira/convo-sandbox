@@ -18,6 +18,17 @@ Three screens:
 - **Policies** (`/policies`) — the matching policy the rankings come from,
   split into blocking rules and ranking rules.
 
+Selecting a day on the scheduled-vs-demand chart opens a near-full-screen
+breakdown of that day in 15-minute intervals: interpreters scheduled against
+interpreters needed, the windows where the queue ran short, and what the
+overstaffed hours cost. The daily bars are sums of that same curve, so the two
+always reconcile.
+
+**Seed demo data** in the header writes this world into a connected Teambridge
+account. It preflights first — reporting which collections exist and which
+fields resolved — and writes nothing until you confirm. Note the API can create
+records but not delete them; see [`AGENTS.md`](./AGENTS.md).
+
 ## Running it
 
 ```bash

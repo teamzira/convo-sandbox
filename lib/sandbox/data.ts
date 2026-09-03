@@ -19,6 +19,7 @@
  * `getTBContext()`, and paged at 50 records per request.
  */
 import { buildInterpreters, buildShifts } from './fixtures';
+import { buildWeekCoverage, type DayCoverage } from './intervals';
 import type { CoverageMetrics, Interpreter, Shift } from './types';
 import { shiftHours } from './matching';
 
@@ -65,8 +66,6 @@ function weekLabel(now: Date, weeksAgo: number): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 export async function getCoverageMetrics(
   now: Date = sandboxNow(),
 ): Promise<CoverageMetrics> {
@@ -78,18 +77,15 @@ export async function getCoverageMetrics(
   const callouts = shifts.filter((s) => s.origin === 'callout');
   const calloutsAutoCovered = callouts.filter((s) => s.status === 'filled').length;
 
-  // Demand vs. what is on the schedule — the gap Convo currently pads with
-  // deliberate overstaffing because last-minute shifts are hard to fill.
-  const scheduledVsDemand = [
-    { day: DAY_LABELS[0], scheduled: 412, demand: 358 },
-    { day: DAY_LABELS[1], scheduled: 428, demand: 391 },
-    { day: DAY_LABELS[2], scheduled: 436, demand: 402 },
-    { day: DAY_LABELS[3], scheduled: 441, demand: 368 },
-    { day: DAY_LABELS[4], scheduled: 455, demand: 421 },
-    { day: DAY_LABELS[5], scheduled: 302, demand: 244 },
-    { day: DAY_LABELS[6], scheduled: 268, demand: 231 },
-  ];
-  const cushionHours = scheduledVsDemand.reduce((sum, d) => sum + (d.scheduled - d.demand), 0);
+  // Daily totals are sums of the quarter-hour curve, so drilling into a day
+  // always reconciles with its bar.
+  const week = buildWeekCoverage(now);
+  const scheduledVsDemand = week.map((day) => ({
+    day: day.label,
+    scheduled: Math.round(day.scheduledHours),
+    demand: Math.round(day.demandHours),
+  }));
+  const cushionHours = Math.round(week.reduce((sum, day) => sum + day.cushionHours, 0));
 
   const amrTrend = [7, 6, 5, 4, 3, 2, 1, 0].map((weeksAgo, index) => ({
     week: weekLabel(now, weeksAgo),
@@ -110,6 +106,11 @@ export async function getCoverageMetrics(
     cushionCostUsd: cushionHours * 47,
     scheduledVsDemand,
   };
+}
+
+/** The quarter-hour curve behind the daily bars, for the day drill-down. */
+export async function getWeekCoverage(now: Date = sandboxNow()): Promise<DayCoverage[]> {
+  return buildWeekCoverage(now);
 }
 
 /** Hours of coverage currently sitting unfilled — the exposure on the board. */

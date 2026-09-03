@@ -30,6 +30,7 @@ import {
   getInterpreterNames,
   getInterpreters,
   getShifts,
+  getWeekCoverage,
   openCoverageHours,
   sandboxNow,
 } from '@/lib/sandbox/data';
@@ -52,11 +53,12 @@ import { CushionChart } from '@/components/coverage/cushion-chart';
 
 export default async function CoveragePage() {
   const now = sandboxNow();
-  const [shifts, interpreters, metrics, names] = await Promise.all([
+  const [shifts, interpreters, metrics, names, week] = await Promise.all([
     getShifts(now),
     getInterpreters(now),
     getCoverageMetrics(now),
     getInterpreterNames(now),
+    getWeekCoverage(now),
   ]);
 
   const openShifts = shifts
@@ -85,6 +87,7 @@ export default async function CoveragePage() {
         title="Coverage"
         description="Open shifts, automated interpreter matching, and utilization"
         active="/"
+        showSeedAction
         actions={
           <Badge variant="outline" className="font-normal text-muted-foreground">
             Sandbox data
@@ -242,13 +245,13 @@ export default async function CoveragePage() {
           <CardHeader>
             <CardTitle className="text-sm">Scheduled hours vs. forecast demand</CardTitle>
             <CardDescription>
-              {formatHours(metrics.cushionHours)} scheduled above demand this week —{' '}
-              {formatUsd(metrics.cushionCostUsd)} of deliberate cushion held because same-day
-              shifts are hard to fill.
+              {formatHours(metrics.cushionHours)} overstaffed this week —{' '}
+              {formatUsd(metrics.cushionCostUsd)} paid and non-billable, held as cushion because
+              same-day shifts are hard to fill. Select a day to see where it goes.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <CushionChart data={metrics.scheduledVsDemand} />
+            <CushionChart data={metrics.scheduledVsDemand} week={week} />
           </CardContent>
         </Card>
       </section>
