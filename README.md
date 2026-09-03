@@ -1,3 +1,61 @@
+# Convo coverage sandbox
+
+A coverage console for Convo, embedded in Teambridge. It covers the loop that
+today becomes a ticket and a round of manual outreach across Rippling, Slack
+and Hex: **an interpreter shift is uncovered — who can take it, and what does
+it cost?**
+
+Three screens:
+
+- **Coverage board** (`/`) — every open shift with its lead time, why it opened,
+  and how many interpreters the policy clears for it right now. Alongside:
+  Active Minute Rate against target, and the hours scheduled above forecast
+  demand that are currently held as callout insurance.
+- **Match & offer** (`/shifts/[id]`) — the ranked pool for one shift, the rule
+  behind every position, every excluded interpreter with the rule that excluded
+  them, and a single blast to the whole eligible pool. First acceptance takes
+  the shift and withdraws the rest.
+- **Policies** (`/policies`) — the matching policy the rankings come from,
+  split into blocking rules and ranking rules.
+
+## Running it
+
+```bash
+yarn install
+yarn dev
+```
+
+`.env.local` only needs `TB_DEV_MODE=true` — the sandbox runs on fixtures and
+needs no Teambridge credentials.
+
+## Where the rules live
+
+Ranking is **not** app logic. `lib/sandbox/policy.ts` mirrors a Matching policy
+(`Shifts → Users`) authored in Teambridge's Policy Builder — same subpolicy
+names, same `BLOCK` / `WARN` flags, same severities, each carrying the
+plain-language prompt Policy Builder compiles to Python.
+`lib/sandbox/matching.ts` reproduces what the engine returns (a per-subpolicy
+`PASS` / `FAIL` / `SKIP` with a message, plus a `passPercentage`) so the console
+could be built before the policy was wired up.
+
+Two limits of the real engine that this mirror respects: ranking is the share
+of checks passed rather than a weighted score, and ties are expected —
+`rankMatches` breaks them on seniority, which is an app-side tiebreak, not the
+engine's.
+
+## Fixtures, and swapping in real data
+
+Every read goes through `lib/sandbox/data.ts`; reimplementing those function
+bodies against the Unified Collections API is the whole migration. See
+[`AGENTS.md`](./AGENTS.md) for the field-by-field mapping and for the open
+question about reaching the policy engine from an external app.
+
+---
+
+# Template reference
+
+The sections below are the Teambridge app template's own documentation.
+
 # Teambridge App Template
 
 A starter template for building external apps that integrate with Teambridge.
