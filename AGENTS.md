@@ -6,17 +6,88 @@ Guidance for AI coding agents (Claude Code, v0, Cursor, etc.) and human contribu
 
 A Next.js starter for apps embedded inside the Teambridge interface (iframe). All apps built from this template should look and feel like Teambridge by following the **Alloy design system** — replicated locally via Tailwind tokens + shadcn/ui (no runtime dependency on the Alloy package).
 
-## ⚠️ Example code — replace before shipping a real app
+## What this repo is now
 
-These files exist only as a working demonstration of how to read Teambridge data and render it with the design system. Treat them as scaffolding to learn from, not a foundation to build on:
+A coverage console for **Convo**, built on the template. The template's demo
+files (`app/create-shift-modal.tsx`, `app/actions.ts`) are gone and
+`app/page.tsx` is the real app — do not treat it as scaffolding to replace.
 
-- `app/page.tsx` — sample shifts dashboard (file required by Next.js — replace its contents, don't delete the file)
-- `app/create-shift-modal.tsx` — sample modal (delete or replace)
-- `app/actions.ts` — sample server action (delete or replace)
+The app answers one operational question: *an interpreter shift is uncovered —
+who can take it, and what does that cost?*
 
-When the user starts building their actual app, **replace this content** before adding real features. Don't extend the demo — start fresh from these files.
+```
+app/
+  page.tsx              Coverage board — open shifts, eligibility counts, AMR, overstaffing
+  shifts/[id]/page.tsx  Match & offer — ranked pool, per-rule reasons, offer blast
+  policies/page.tsx     The matching policy the rankings come from
+lib/sandbox/
+  types.ts      Domain + policy-result model
+  fixtures.ts   Stand-in dataset, generated relative to today
+  data.ts       Async accessors — the single swap point for real data
+  policy.ts     Local mirror of the Policy Builder matching policy
+  matching.ts   Stand-in for the policy engine's evaluation
+  view.ts       Server → client view models
+  format.ts     Presentation helpers
+components/coverage/    App components (shadcn primitives underneath)
+```
 
-The Teambridge integration in `lib/teambridge/`, the API route handlers in `app/api/teambridge/`, the layout in `app/layout.tsx`, the styling in `app/globals.css`, and the shadcn components in `components/ui/` are all part of the template and should be kept.
+The Teambridge integration in `lib/teambridge/`, the API routes in
+`app/api/teambridge/`, `app/layout.tsx`, `app/globals.css` and
+`components/ui/` are template code and should be kept.
+
+## Policy Builder owns the rules — this app does not
+
+Ranking is **not** app logic. `lib/sandbox/policy.ts` is a local mirror of a
+Matching policy (`Shifts → Users`) authored in Teambridge's Policy Builder:
+same subpolicy names, same `BLOCK` / `WARN` flags, same severities. Each
+subpolicy carries the plain-language `prompt` that Policy Builder turns into
+evaluated Python.
+
+`lib/sandbox/matching.ts` reproduces what the engine returns — a
+`PASS` / `FAIL` / `SKIP` verdict per subpolicy with a message, plus a
+`passPercentage` to rank on — so the console could be built and reviewed before
+the policy is wired up.
+
+**When adding a rule, add it to the policy in Teambridge first, then mirror it
+here.** Do not add ranking logic that Policy Builder cannot express. Two known
+limits:
+
+- **No tunable weights.** Ranking is the share of subpolicy checks passed, not
+  a weighted score. Express priority through `BLOCK` vs `WARN` and through how
+  many subpolicies cover a dimension — not through coefficients.
+- **Ties are expected.** The engine returns them; `rankMatches` breaks ties on
+  seniority, which is the contract's stated tiebreak, and that tiebreak is the
+  app's, not the engine's.
+
+## Going from fixtures to a live account
+
+Every read goes through `lib/sandbox/data.ts`. Reimplement those function
+bodies and nothing else changes:
+
+| View model | Source |
+|---|---|
+| `Interpreter` | `Users` collection + credential, availability and commitment fields |
+| `Shift` | `Shifts` collection; `previousInterpreterId` / `assignedInterpreterId` are reference fields holding a related record id |
+| `Offer` | `Shift Offers` collection, one record per interpreter per blast |
+| `CoverageMetrics` | computed server-side and returned ready to render |
+| Ranked candidates | the policy engine, not `matching.ts` |
+
+Reads must be user-scoped (`getTBClient(userContext)`) and paged at 50 records.
+
+One open question to settle before wiring the engine up: **the policy endpoints
+are internal app routes, not Open API**, so an external app like this one
+cannot call `matching_policies/widget_matching` directly. The realistic path is
+an automation targeting `POLICY_MATCHED_USERS` that runs the policy and writes
+matches and offers into a collection this app reads. Confirm against the server
+repo before designing around it.
+
+## Sending offers
+
+`components/coverage/offer-panel.tsx` simulates the blast in client state. In
+Teambridge this is an automation whose target is `POLICY_MATCHED_USERS`: it
+runs the matching policy against the shift and messages the top N over
+SMS / in-app / email. Nothing in the UI needs to change when that replaces the
+simulation — only where the state comes from.
 
 ## Navigation & data fetching
 
@@ -244,14 +315,14 @@ const locationId = locationField ? record[locationField.id] : null;
 const locationId = record.locationId;
 ```
 
-**Reference fields** (e.g. `Location` on a Shift, `Assignee` linking to Users) store the **record ID** of the related record, not its display name. To render names, fetch the related collection's records, build a `recordId → name` map keyed by that collection's name fields (e.g. `First Name` + `Last Name` on Users), and look up by ID at render time. The `app/page.tsx` demo does this for the Assignee column — copy that pattern.
+**Reference fields** (e.g. `Location` on a Shift, `Assignee` linking to Users) store the **record ID** of the related record, not its display name. To render names, fetch the related collection's records, build a `recordId → name` map keyed by that collection's name fields (e.g. `First Name` + `Last Name` on Users), and look up by ID at render time. `lib/sandbox/data.ts` documents which reference fields this app needs resolved that way.
 
 ## Project structure
 
 ```
 app/
   layout.tsx          # Root layout, TBProvider wired in
-  page.tsx            # ⚠ Example — replace
+  page.tsx            # Coverage board
   globals.css         # Alloy tokens + Tailwind theme bridge — keep
   api/teambridge/
     install/route.ts  # Lifecycle webhook
@@ -269,7 +340,7 @@ middleware.ts         # Request validation
 - Using `<button>` / `<input>` directly instead of shadcn's `Button` / `Input`.
 - Importing fonts other than Geist.
 - Editing `app/globals.css` to inject app-specific colors. Extend the Alloy palette there only with semantic justification.
-- Treating `app/page.tsx` as the starting point of a real app instead of replacing it.
+- Adding ranking logic to the app that Policy Builder cannot express.
 - Adding `dark:` variants for surface colors that the semantic tokens already handle.
 - Setting `min-h-screen` on root containers (breaks iframe sizing).
 

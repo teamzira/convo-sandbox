@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'My Teambridge App',
-  description: 'A Teambridge external app',
+  title: 'Coverage — Convo',
+  description:
+    'Open shift coverage, automated interpreter matching, and utilization for Convo',
 };
 
 export default function RootLayout({
